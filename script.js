@@ -1,14 +1,13 @@
 /* =========================================================
    24HR STORIES
    Vanilla JavaScript
+   MongoDB Atlas + Express
 ========================================================= */
 
 
 /* =========================================================
    CONFIG
 ========================================================= */
-
-const STORAGE_KEY = "advanced_24hr_stories";
 
 const MAX_WIDTH = 1080;
 const MAX_HEIGHT = 1920;
@@ -204,9 +203,9 @@ document.addEventListener(
 );
 
 
-function initialize() {
+async function initialize() {
 
-    loadStories();
+    await loadStories();
 
     cleanExpiredStories();
 
@@ -253,8 +252,11 @@ function setupEvents() {
                     "[data-close-upload]"
                 )
             ) {
+
                 closeUpload();
+
             }
+
         }
     );
 
@@ -326,8 +328,11 @@ function setupEvents() {
             if (
                 event.pointerType === "mouse"
             ) {
+
                 pauseStory();
+
             }
+
         }
     );
 
@@ -338,8 +343,11 @@ function setupEvents() {
             if (
                 event.pointerType === "mouse"
             ) {
+
                 resumeStory();
+
             }
+
         }
     );
 
@@ -354,69 +362,230 @@ function setupEvents() {
 
 
 /* =========================================================
-   LOCAL STORAGE
+   MONGODB / API
 ========================================================= */
 
-function loadStories() {
+
+/*
+    Load active stories from MongoDB Atlas
+*/
+
+async function loadStories() {
 
     try {
 
-        const data =
-            localStorage.getItem(
-                STORAGE_KEY
+        const response =
+            await fetch(
+                "/api/stories"
             );
 
-        if (!data) {
 
-            stories = [];
+        if (!response.ok) {
 
-            return;
+            throw new Error(
+                `Failed to load stories: ${response.status}`
+            );
+
         }
 
-        const parsed =
-            JSON.parse(data);
+
+        const data =
+            await response.json();
+
 
         stories =
-            Array.isArray(parsed)
-                ? parsed
+            Array.isArray(data)
+                ? data
                 : [];
+
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Load stories error:",
+            error
+        );
+
 
         stories = [];
 
+
         showToast(
-            "Could not load saved stories.",
+            "Could not load stories from cloud.",
             "error"
         );
+
     }
+
 }
 
 
-function saveStories() {
+/*
+    Save new story to MongoDB Atlas
+*/
 
-    try {
+async function saveStoryToCloud(
+    image
+) {
 
-        localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(stories)
+    const response =
+        await fetch(
+            "/api/stories",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    image: image
+                })
+            }
         );
 
-        return true;
 
-    } catch (error) {
+    if (!response.ok) {
 
-        console.error(error);
+        let message =
+            "Failed to save story.";
 
-        showToast(
-            "Browser storage is full.",
-            "error"
+        try {
+
+            const errorData =
+                await response.json();
+
+            if (
+                errorData.message
+            ) {
+
+                message =
+                    errorData.message;
+
+            }
+
+        } catch {
+
+            // Ignore invalid error response.
+
+        }
+
+
+        throw new Error(
+            message
         );
 
-        return false;
     }
+
+
+    return await response.json();
+}
+
+
+/*
+    Delete one story from MongoDB Atlas
+*/
+
+async function deleteStoryFromCloud(
+    id
+) {
+
+    const response =
+        await fetch(
+            `/api/stories/${id}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+
+    if (!response.ok) {
+
+        let message =
+            "Failed to delete story.";
+
+        try {
+
+            const errorData =
+                await response.json();
+
+            if (
+                errorData.message
+            ) {
+
+                message =
+                    errorData.message;
+
+            }
+
+        } catch {
+
+            // Ignore invalid error response.
+
+        }
+
+
+        throw new Error(
+            message
+        );
+
+    }
+
+
+    return await response.json();
+}
+
+
+/*
+    Delete all stories from MongoDB Atlas
+*/
+
+async function deleteAllStoriesFromCloud() {
+
+    const response =
+        await fetch(
+            "/api/stories",
+            {
+                method: "DELETE"
+            }
+        );
+
+
+    if (!response.ok) {
+
+        let message =
+            "Failed to delete stories.";
+
+        try {
+
+            const errorData =
+                await response.json();
+
+            if (
+                errorData.message
+            ) {
+
+                message =
+                    errorData.message;
+
+            }
+
+        } catch {
+
+            // Ignore invalid error response.
+
+        }
+
+
+        throw new Error(
+            message
+        );
+
+    }
+
+
+    return await response.json();
 }
 
 
@@ -426,62 +595,103 @@ function saveStories() {
 
 function cleanExpiredStories() {
 
-    const now = Date.now();
+    const now =
+        Date.now();
 
-    const before =
-        stories.length;
 
     stories =
         stories.filter(
-            story =>
-                story.expiresAt > now
+            story => {
+
+                const expiresAt =
+                    new Date(
+                        story.expiresAt
+                    ).getTime();
+
+
+                return (
+                    expiresAt > now
+                );
+
+            }
         );
-
-    if (
-        before !== stories.length
-    ) {
-
-        saveStories();
-    }
 }
 
+
+/*
+    Refresh stories from MongoDB
+    every 30 seconds.
+*/
 
 function startExpirationWatcher() {
 
     setInterval(
-        () => {
+        async () => {
 
-            const before =
-                stories.length;
+            try {
 
-            cleanExpiredStories();
+                const response =
+                    await fetch(
+                        "/api/stories"
+                    );
 
-            if (
-                before !== stories.length
-            ) {
+
+                if (!response.ok) {
+                    return;
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                stories =
+                    Array.isArray(data)
+                        ? data
+                        : [];
+
+
+                cleanExpiredStories();
 
                 renderStories();
 
+
                 if (
-                    storyViewer.classList.contains(
+                    !storyViewer.classList.contains(
                         "hidden"
-                    ) === false
+                    )
                 ) {
 
                     if (
-                        currentStoryIndex >=
-                        stories.length
+                        stories.length === 0
                     ) {
 
                         closeStoryViewer();
 
-                    } else {
+                    } else if (
+                        currentStoryIndex >=
+                        stories.length
+                    ) {
+
+                        currentStoryIndex =
+                            stories.length - 1;
 
                         showStory(
                             currentStoryIndex
                         );
+
                     }
+
                 }
+
+
+            } catch (error) {
+
+                console.error(
+                    "Cloud refresh error:",
+                    error
+                );
+
             }
 
         },
@@ -504,6 +714,7 @@ function renderStories() {
             ".generated-story"
         );
 
+
     generated.forEach(
         element =>
             element.remove()
@@ -519,9 +730,11 @@ function renderStories() {
                     index
                 );
 
+
             storiesContainer.appendChild(
                 card
             );
+
         }
     );
 
@@ -544,8 +757,10 @@ function createStoryCard(
             "button"
         );
 
+
     button.type =
         "button";
+
 
     button.className =
         "story-card generated-story";
@@ -556,6 +771,7 @@ function createStoryCard(
             "div"
         );
 
+
     ring.className =
         "story-ring";
 
@@ -564,6 +780,7 @@ function createStoryCard(
         document.createElement(
             "div"
         );
+
 
     imageContainer.className =
         "story-image";
@@ -574,8 +791,10 @@ function createStoryCard(
             "img"
         );
 
+
     image.src =
         story.image;
+
 
     image.alt =
         "Story";
@@ -586,8 +805,10 @@ function createStoryCard(
             "span"
         );
 
+
     name.className =
         "story-name";
+
 
     name.textContent =
         "Your story";
@@ -597,13 +818,16 @@ function createStoryCard(
         image
     );
 
+
     ring.appendChild(
         imageContainer
     );
 
+
     button.appendChild(
         ring
     );
+
 
     button.appendChild(
         name
@@ -639,7 +863,9 @@ function updateStoryUI() {
         }`;
 
 
-    if (count === 0) {
+    if (
+        count === 0
+    ) {
 
         emptyState.classList.remove(
             "hidden"
@@ -658,6 +884,7 @@ function updateStoryUI() {
         clearStoriesButton.classList.remove(
             "hidden"
         );
+
     }
 }
 
@@ -672,6 +899,7 @@ function openUploadModal() {
         "hidden"
     );
 
+
     document.body.style.overflow =
         "hidden";
 }
@@ -683,6 +911,7 @@ function closeUpload() {
         "hidden"
     );
 
+
     if (
         storyViewer.classList.contains(
             "hidden"
@@ -691,6 +920,7 @@ function closeUpload() {
 
         document.body.style.overflow =
             "";
+
     }
 }
 
@@ -723,6 +953,7 @@ async function handleImageSelection(
             "error"
         );
 
+
         resetFileInput();
 
         return;
@@ -742,6 +973,7 @@ async function handleImageSelection(
             "error"
         );
 
+
         resetFileInput();
 
         return;
@@ -755,70 +987,71 @@ async function handleImageSelection(
 
     try {
 
+        /*
+            Convert and resize image
+            exactly like your original code.
+        */
+
         const image =
-            await processImage(file);
+            await processImage(
+                file
+            );
 
 
-        const now =
-            Date.now();
+        /*
+            Save Base64 image
+            directly to MongoDB Atlas
+            through Express.
+        */
+
+        const savedStory =
+            await saveStoryToCloud(
+                image
+            );
 
 
-        const story = {
-
-            id:
-                crypto.randomUUID
-                ? crypto.randomUUID()
-                : createFallbackId(),
-
-            image,
-
-            createdAt:
-                now,
-
-            expiresAt:
-                now +
-                EXPIRATION_TIME
-        };
-
+        /*
+            MongoDB returns:
+            _id
+            image
+            createdAt
+            expiresAt
+        */
 
         stories.unshift(
-            story
+            savedStory
         );
 
 
-        const saved =
-            saveStories();
-
-
-        if (!saved) {
-
-            stories.shift();
-
-            return;
-        }
-
-
         renderStories();
+
 
         showToast(
             "Your story has been added.",
             "success"
         );
 
+
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Upload error:",
+            error
+        );
+
 
         showToast(
-            "Could not process this image.",
+            "Could not save your story.",
             "error"
         );
+
 
     } finally {
 
         hideLoading();
 
         resetFileInput();
+
     }
 }
 
@@ -849,6 +1082,7 @@ function processImage(file) {
                             let width =
                                 image.naturalWidth;
 
+
                             let height =
                                 image.naturalHeight;
 
@@ -866,6 +1100,7 @@ function processImage(file) {
                                     width * scale
                                 );
 
+
                             height =
                                 Math.round(
                                     height * scale
@@ -881,6 +1116,7 @@ function processImage(file) {
                             canvas.width =
                                 width;
 
+
                             canvas.height =
                                 height;
 
@@ -894,6 +1130,7 @@ function processImage(file) {
                             context.imageSmoothingEnabled =
                                 true;
 
+
                             context.imageSmoothingQuality =
                                 "high";
 
@@ -904,6 +1141,7 @@ function processImage(file) {
 
                             context.fillStyle =
                                 "#ffffff";
+
 
                             context.fillRect(
                                 0,
@@ -922,6 +1160,10 @@ function processImage(file) {
                             );
 
 
+                            /*
+                                Convert to Base64.
+                            */
+
                             const base64 =
                                 canvas.toDataURL(
                                     "image/jpeg",
@@ -932,6 +1174,7 @@ function processImage(file) {
                             resolve(
                                 base64
                             );
+
                         };
 
 
@@ -943,11 +1186,13 @@ function processImage(file) {
                                     "Invalid image"
                                 )
                             );
+
                         };
 
 
                     image.src =
                         event.target.result;
+
                 };
 
 
@@ -959,12 +1204,14 @@ function processImage(file) {
                             "File could not be read"
                         )
                     );
+
                 };
 
 
             reader.readAsDataURL(
                 file
             );
+
         }
     );
 }
@@ -974,7 +1221,9 @@ function processImage(file) {
    STORY VIEWER
 ========================================================= */
 
-function openStoryViewer(index) {
+function openStoryViewer(
+    index
+) {
 
     cleanExpiredStories();
 
@@ -1002,6 +1251,7 @@ function openStoryViewer(index) {
         "hidden"
     );
 
+
     document.body.style.overflow =
         "hidden";
 
@@ -1016,7 +1266,9 @@ function openStoryViewer(index) {
    SHOW STORY
 ========================================================= */
 
-function showStory(index) {
+function showStory(
+    index
+) {
 
     if (
         storyTransitioning
@@ -1057,6 +1309,7 @@ function showStory(index) {
     storyPhotoWrapper.style.opacity =
         "0";
 
+
     storyPhotoWrapper.style.transform =
         "scale(.97)";
 
@@ -1067,8 +1320,10 @@ function showStory(index) {
             viewerImage.src =
                 story.image;
 
+
             viewerAvatar.src =
                 story.image;
+
 
             viewerBackground.style.backgroundImage =
                 `url("${story.image}")`;
@@ -1086,13 +1341,17 @@ function showStory(index) {
                     storyPhotoWrapper.style.opacity =
                         "1";
 
+
                     storyPhotoWrapper.style.transform =
                         "scale(1)";
 
+
                     storyTransitioning =
                         false;
+
                 }
             );
+
 
         },
         100
@@ -1102,13 +1361,17 @@ function showStory(index) {
     isPaused =
         false;
 
+
     elapsedBeforePause =
         0;
+
 
     currentDuration =
         STORY_DURATION;
 
+
     updatePauseIcon();
+
 
     startTimer();
 }
@@ -1132,6 +1395,7 @@ function renderProgressBars() {
                     "div"
                 );
 
+
             item.className =
                 "progress-item";
 
@@ -1140,6 +1404,7 @@ function renderProgressBars() {
                 document.createElement(
                     "div"
                 );
+
 
             fill.className =
                 "progress-fill";
@@ -1152,6 +1417,7 @@ function renderProgressBars() {
 
                 fill.style.width =
                     "100%";
+
             }
 
 
@@ -1159,9 +1425,11 @@ function renderProgressBars() {
                 fill
             );
 
+
             progressContainer.appendChild(
                 item
             );
+
         }
     );
 }
@@ -1199,7 +1467,9 @@ function startTimer() {
         setInterval(
             () => {
 
-                if (isPaused) {
+                if (
+                    isPaused
+                ) {
                     return;
                 }
 
@@ -1234,6 +1504,7 @@ function startTimer() {
                     clearTimer();
 
                     goNext();
+
                 }
 
             },
@@ -1252,8 +1523,10 @@ function clearTimer() {
             progressTimer
         );
 
+
         progressTimer =
             null;
+
     }
 }
 
@@ -1274,6 +1547,7 @@ function goNext() {
 
         currentStoryIndex++;
 
+
         showStory(
             currentStoryIndex
         );
@@ -1281,6 +1555,7 @@ function goNext() {
     } else {
 
         closeStoryViewer();
+
     }
 }
 
@@ -1296,6 +1571,7 @@ function goPrevious() {
 
         currentStoryIndex--;
 
+
         showStory(
             currentStoryIndex
         );
@@ -1305,6 +1581,7 @@ function goPrevious() {
         showStory(
             currentStoryIndex
         );
+
     }
 }
 
@@ -1313,7 +1590,7 @@ function goPrevious() {
    DELETE STORY
 ========================================================= */
 
-function deleteCurrentStory() {
+async function deleteCurrentStory() {
 
     if (
         !stories[currentStoryIndex]
@@ -1333,51 +1610,88 @@ function deleteCurrentStory() {
     }
 
 
-    stories.splice(
-        currentStoryIndex,
-        1
-    );
+    const story =
+        stories[currentStoryIndex];
 
 
-    saveStories();
+    try {
 
-    renderStories();
+        /*
+            Delete from MongoDB first.
+        */
+
+        await deleteStoryFromCloud(
+            story._id
+        );
 
 
-    if (
-        stories.length === 0
-    ) {
+        /*
+            Then remove from
+            local in-memory array.
+        */
 
-        closeStoryViewer();
+        stories.splice(
+            currentStoryIndex,
+            1
+        );
+
+
+        renderStories();
+
+
+        if (
+            stories.length === 0
+        ) {
+
+            closeStoryViewer();
+
+
+            showToast(
+                "Story deleted.",
+                "success"
+            );
+
+
+            return;
+        }
+
+
+        if (
+            currentStoryIndex >=
+            stories.length
+        ) {
+
+            currentStoryIndex =
+                stories.length - 1;
+
+        }
+
+
+        showStory(
+            currentStoryIndex
+        );
+
 
         showToast(
             "Story deleted.",
             "success"
         );
 
-        return;
+
+    } catch (error) {
+
+        console.error(
+            "Delete error:",
+            error
+        );
+
+
+        showToast(
+            "Could not delete story from cloud.",
+            "error"
+        );
+
     }
-
-
-    if (
-        currentStoryIndex >=
-        stories.length
-    ) {
-
-        currentStoryIndex =
-            stories.length - 1;
-    }
-
-
-    showStory(
-        currentStoryIndex
-    );
-
-
-    showToast(
-        "Story deleted.",
-        "success"
-    );
 }
 
 
@@ -1385,7 +1699,7 @@ function deleteCurrentStory() {
    CLEAR ALL
 ========================================================= */
 
-function clearAllStories() {
+async function clearAllStories() {
 
     if (
         stories.length === 0
@@ -1405,16 +1719,48 @@ function clearAllStories() {
     }
 
 
-    stories = [];
+    try {
 
-    saveStories();
+        await deleteAllStoriesFromCloud();
 
-    renderStories();
 
-    showToast(
-        "All stories deleted.",
-        "success"
-    );
+        stories = [];
+
+
+        renderStories();
+
+
+        if (
+            !storyViewer.classList.contains(
+                "hidden"
+            )
+        ) {
+
+            closeStoryViewer();
+
+        }
+
+
+        showToast(
+            "All stories deleted.",
+            "success"
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "Clear all error:",
+            error
+        );
+
+
+        showToast(
+            "Could not delete stories from cloud.",
+            "error"
+        );
+
+    }
 }
 
 
@@ -1449,6 +1795,7 @@ function pauseStory() {
 
     clearTimer();
 
+
     updatePauseIcon();
 }
 
@@ -1468,19 +1815,23 @@ function resumeStory() {
 
     startTimer();
 
+
     updatePauseIcon();
 }
 
 
 function togglePause() {
 
-    if (isPaused) {
+    if (
+        isPaused
+    ) {
 
         resumeStory();
 
     } else {
 
         pauseStory();
+
     }
 }
 
@@ -1509,8 +1860,10 @@ function handleTouchStart(
     touchStartX =
         touch.clientX;
 
+
     touchStartY =
         touch.clientY;
+
 
     touchStartTime =
         Date.now();
@@ -1528,6 +1881,7 @@ function handleTouchEnd(
     const endX =
         touch.clientX;
 
+
     const endY =
         touch.clientY;
 
@@ -1535,6 +1889,7 @@ function handleTouchEnd(
     const deltaX =
         endX -
         touchStartX;
+
 
     const deltaY =
         endY -
@@ -1556,6 +1911,7 @@ function handleTouchEnd(
     ) {
 
         return;
+
     }
 
 
@@ -1568,6 +1924,7 @@ function handleTouchEnd(
     ) {
 
         return;
+
     }
 
 
@@ -1581,6 +1938,7 @@ function handleTouchEnd(
     ) {
 
         return;
+
     }
 
 
@@ -1593,6 +1951,7 @@ function handleTouchEnd(
     } else {
 
         goPrevious();
+
     }
 }
 
@@ -1646,6 +2005,7 @@ function handleKeyboard(
             togglePause();
 
             break;
+
     }
 }
 
@@ -1674,6 +2034,7 @@ function handleVisibility() {
     } else {
 
         resumeStory();
+
     }
 }
 
@@ -1686,27 +2047,35 @@ function closeStoryViewer() {
 
     clearTimer();
 
+
     storyViewer.classList.add(
         "hidden"
     );
 
+
     document.body.style.overflow =
         "";
+
 
     viewerImage.src =
         "";
 
+
     viewerAvatar.src =
         "";
+
 
     viewerBackground.style.backgroundImage =
         "";
 
+
     isPaused =
         false;
 
+
     elapsedBeforePause =
         0;
+
 
     updatePauseIcon();
 }
@@ -1722,7 +2091,9 @@ function getTimeAgo(
 
     const difference =
         Date.now() -
-        timestamp;
+        new Date(
+            timestamp
+        ).getTime();
 
 
     const seconds =
@@ -1736,6 +2107,7 @@ function getTimeAgo(
     ) {
 
         return "Just now";
+
     }
 
 
@@ -1750,6 +2122,7 @@ function getTimeAgo(
     ) {
 
         return `${minutes}m ago`;
+
     }
 
 
@@ -1764,6 +2137,7 @@ function getTimeAgo(
     ) {
 
         return `${hours}h ago`;
+
     }
 
 
@@ -1801,6 +2175,7 @@ function showToast(
             "span"
         );
 
+
     text.textContent =
         message;
 
@@ -1821,8 +2196,10 @@ function showToast(
             toast.style.opacity =
                 "0";
 
+
             toast.style.transform =
                 "translateY(10px)";
+
 
             setTimeout(
                 () => {
@@ -1870,19 +2247,6 @@ function resetFileInput() {
 }
 
 
-function createFallbackId() {
-
-    return (
-        "story-" +
-        Date.now() +
-        "-" +
-        Math.random()
-            .toString(36)
-            .slice(2)
-    );
-}
-
-
 /* =========================================================
    SAFETY: CLEAN ON LOAD
 ========================================================= */
@@ -1894,5 +2258,6 @@ window.addEventListener(
         cleanExpiredStories();
 
         renderStories();
+
     }
 );
