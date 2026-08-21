@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    >
+
+    <meta
+        name="description"
+        content="A beautiful client-side 24 hour stories application."
+    >
+
+    <title>Stories — 24 Hours</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =========================================
+         APP
+    ========================================== -->
+
+    <div class="app">
+
+        <!-- HEADER -->
+
+        <header class="topbar">
+
+            <div class="brand">
+                <div class="brand-mark">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+                <div class="brand-text">
+                    <h1>Stories</h1>
+                    <p>Share your moment</p>
+                </div>
+            </div>
+
+            <div class="header-badge">
+                <span class="status-dot"></span>
+                24h
+            </div>
+
+        </header>
+
+
+        <!-- =====================================
+             STORIES
+        ====================================== -->
+
+        <main>
+
+            <section class="stories-section">
+
+                <div class="section-heading">
+
+                    <div>
+                        <h2>Your stories</h2>
+                        <p id="storyCount">
+                            0 active stories
+                        </p>
+                    </div>
+
+                    <button
+                        class="clear-button hidden"
+                        id="clearStoriesButton"
+                    >
+                        Clear all
+                    </button>
+
+                </div>
+
+
+                <div
+                    class="stories-scroll"
+                    id="storiesContainer"
+                >
+
+                    <!-- ADD STORY -->
+
+                    <button
+                        class="story-card add-story-card"
+                        id="addStoryButton"
+                        type="button"
+                    >
+
+                        <div class="story-ring add-ring">
+
+                            <div class="story-image add-image">
+                                <span>+</span>
+                            </div>
+
+                        </div>
+
+                        <span class="story-name">
+                            Add story
+                        </span>
+
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <!-- =================================
+                 EMPTY STATE
+            ================================== -->
+
+            <section
+                class="empty-state"
+                id="emptyState"
+            >
+
+                <div class="empty-visual">
+
+                    <div class="empty-glow"></div>
+
+                    <div class="empty-camera">
+                        <div class="camera-lens"></div>
+                        <div class="camera-flash"></div>
+                    </div>
+
+                </div>
+
+                <span class="eyebrow">
+                    YOUR MOMENT
+                </span>
+
+                <h2>
+                    Nothing here yet.
+                </h2>
+
+                <p>
+                    Capture a moment and share it.
+                    Your story will automatically disappear
+                    after 24 hours.
+                </p>
+
+                <button
+                    class="primary-button"
+                    id="emptyAddButton"
+                    type="button"
+                >
+                    <span class="button-icon">+</span>
+                    Create your first story
+                </button>
+
+            </section>
+
+        </main>
+
+    </div>
+
+
+    <!-- =========================================
+         FILE INPUT
+    ========================================== -->
+
+    <input
+        type="file"
+        id="imageInput"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+        hidden
+    >
+
+
+    <!-- =========================================
+         UPLOAD MODAL
+    ========================================== -->
+
+    <div
+        class="upload-modal hidden"
+        id="uploadModal"
+    >
+
+        <div
+            class="upload-backdrop"
+            data-close-upload
+        ></div>
+
+        <div class="upload-dialog">
+
+            <button
+                class="modal-close"
+                id="closeUploadModal"
+                type="button"
+            >
+                ×
+            </button>
+
+            <div class="upload-icon">
+                <span>＋</span>
+            </div>
+
+            <span class="eyebrow">
+                NEW STORY
+            </span>
+
+            <h2>Share a moment</h2>
+
+            <p>
+                Choose an image from your device.
+                We'll optimize it automatically.
+            </p>
+
+            <div class="upload-info">
+
+                <div>
+                    <strong>1080×1920</strong>
+                    <span>Maximum size</span>
+                </div>
+
+                <div>
+                    <strong>24 hours</strong>
+                    <span>Story lifetime</span>
+                </div>
+
+                <div>
+                    <strong>Local</strong>
+                    <span>Private storage</span>
+                </div>
+
+            </div>
+
+            <button
+                class="primary-button upload-select-button"
+                id="selectImageButton"
+                type="button"
+            >
+                Choose an image
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         STORY VIEWER
+    ========================================== -->
+
+    <div
+        class="story-viewer hidden"
+        id="storyViewer"
+    >
+
+        <!-- Dynamic blurred background -->
+
+        <div
+            class="viewer-bg"
+            id="viewerBackground"
+        ></div>
+
+        <div class="viewer-overlay"></div>
+
+
+        <!-- PROGRESS -->
+
+        <div
+            class="progress-container"
+            id="progressContainer"
+        ></div>
+
+
+        <!-- TOP BAR -->
+
+        <div class="viewer-topbar">
+
+            <div class="viewer-user">
+
+                <div class="viewer-avatar">
+                    <img
+                        id="viewerAvatar"
+                        src=""
+                        alt="Story"
+                    >
+                </div>
+
+                <div class="viewer-user-info">
+
+                    <strong>My Story</strong>
+
+                    <span id="storyTime">
+                        Just now
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="viewer-actions">
+
+                <button
+                    class="viewer-action-button"
+                    id="pauseButton"
+                    type="button"
+                    aria-label="Pause story"
+                >
+                    <span id="pauseIcon">Ⅱ</span>
+                </button>
+
+                <button
+                    class="viewer-action-button delete-action"
+                    id="deleteStoryButton"
+                    type="button"
+                    aria-label="Delete story"
+                >
+                    <span>⌫</span>
+                </button>
+
+                <button
+                    class="viewer-action-button"
+                    id="closeViewer"
+                    type="button"
+                    aria-label="Close"
+                >
+                    ×
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- STORY STAGE -->
+
+        <div
+            class="story-stage"
+            id="storyStage"
+        >
+
+            <div
+                class="story-photo-wrapper"
+                id="storyPhotoWrapper"
+            >
+
+                <img
+                    id="viewerImage"
+                    src=""
+                    alt="Current story"
+                >
+
+            </div>
+
+        </div>
+
+
+        <!-- NAVIGATION -->
+
+        <button
+            class="story-nav previous"
+            id="previousStory"
+            type="button"
+            aria-label="Previous story"
+        >
+            <span>‹</span>
+        </button>
+
+        <button
+            class="story-nav next"
+            id="nextStory"
+            type="button"
+            aria-label="Next story"
+        >
+            <span>›</span>
+        </button>
+
+
+        <!-- BOTTOM HINT -->
+
+        <div class="viewer-hint">
+            <span>Swipe</span>
+            <span class="hint-line"></span>
+            <span>to navigate</span>
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         LOADING
+    ========================================== -->
+
+    <div
+        class="loading-screen hidden"
+        id="loadingScreen"
+    >
+
+        <div class="loading-card">
+
+            <div class="loading-spinner"></div>
+
+            <strong>
+                Optimizing image
+            </strong>
+
+            <span>
+                Please wait...
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         TOAST
+    ========================================== -->
+
+    <div
+        class="toast-container"
+        id="toastContainer"
+    ></div>
+
+
+    <script src="script.js"></script>
+
+</body>
+</html>
